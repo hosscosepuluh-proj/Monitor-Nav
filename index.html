@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Monitoring Navigasi Kapal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+body { background-color:#f4f7fa; }
+.header-title { font-weight:700; color:#0d3b66; }
+.card { border-radius:15px; }
+.form-section-title { font-weight:600; margin-top:30px; margin-bottom:15px; color:#0d3b66; }
+.btn-primary { background-color:#0d3b66; border:none; }
+.btn-primary:hover { background-color:#145da0; }
+.preview-img { width:150px; height:120px; object-fit:cover; border-radius:10px; margin:5px; border:2px solid #ddd; }
+.alert-box { display:none; }
+</style>
+</head>
+
+<body>
+
+<div class="container my-5">
+
+<div class="text-center mb-4">
+<h2 class="header-title">FORM MONITORING ALAT NAVIGASI & KOMUNIKASI</h2>
+<p class="text-muted">Sistem Monitoring Peralatan Kapal</p>
+</div>
+
+<div id="alertArea" class="alert alert-danger alert-box text-center fw-bold"></div>
+
+<div class="card shadow p-4">
+
+<form id="monitoringForm">
+
+<div class="form-section-title">Informasi Umum</div>
+
+<div class="row">
+<div class="col-md-6 mb-3">
+<label class="form-label">Tanggal</label>
+<input type="date" class="form-control" id="tanggal" required>
+</div>
+
+<div class="col-md-6 mb-3">
+<label class="form-label">Nama Kapal</label>
+<select class="form-select" id="kapal" required>
+<option selected>LCT Perkasa Prima 7</option>
+<option>LCT Harapan Perdana XII</option>
+<option>LCT Marine Energy 1</option>
+</select>
+</div>
+</div>
+
+<div class="form-section-title">Status Peralatan</div>
+<div class="row" id="alatContainer"></div>
+
+<div class="form-section-title">Upload Foto Bukti Alat</div>
+<div class="mb-3">
+<input type="file" class="form-control" id="fotoInput" multiple accept="image/*">
+</div>
+<div id="previewContainer" class="d-flex flex-wrap"></div>
+
+<div class="form-section-title">Catatan</div>
+<div class="mb-3">
+<textarea class="form-control" rows="4" id="catatan"></textarea>
+</div>
+
+<div class="text-end">
+<button type="submit" class="btn btn-primary px-4">Kirim Laporan</button>
+</div>
+
+</form>
+</div>
+</div>
+
+<script>
+
+const alatList = [
+"Radar","GPS","AIS","Radio SSB","Radio VHF",
+"Kompas Magnetic","Radio HT","Clinometer",
+"Radio GMDSS","Navtex",
+"Indikator Mesin (RPM) - Yanmar","Indikator Kemudi",
+"P. Supply (IWARA)","P. Supply (EDAKAI)",
+"P. Supply (NSSEI)","P. Supply (MALDOL)",
+"Echosounder","Binocular","UPS"
+];
+
+document.addEventListener("DOMContentLoaded", function(){
+let container = document.getElementById("alatContainer");
+
+alatList.forEach(function(nama){
+container.innerHTML += `
+<div class="col-md-6 mb-3">
+<label class="form-label">${nama}</label>
+<select class="form-select status-select">
+<option>OK</option>
+<option>NOT OK</option>
+<option>PERLU SERVICE</option>
+</select>
+</div>`;
+});
+});
+
+/* PREVIEW FOTO */
+document.getElementById("fotoInput").addEventListener("change", function(){
+let preview = document.getElementById("previewContainer");
+preview.innerHTML = "";
+
+Array.from(this.files).forEach(file => {
+let reader = new FileReader();
+reader.onload = function(e){
+let img = document.createElement("img");
+img.src = e.target.result;
+img.classList.add("preview-img");
+preview.appendChild(img);
+}
+reader.readAsDataURL(file);
+});
+});
+
+/* =============================
+   KONEKSI GOOGLE APPS SCRIPT
+============================= */
+
+const scriptURL = "https://script.google.com/macros/s/AKfycbyFBsDKb4P70XdaX6MKn-DnPblhT3NkQAODHhB7cprRMHI9PjRj8zSRGvb868O-jsM/exec";
+
+document.getElementById("monitoringForm").addEventListener("submit", function(e) {
+
+e.preventDefault();
+
+let tanggal = document.getElementById("tanggal").value;
+let kapal = document.getElementById("kapal").value;
+let catatan = document.getElementById("catatan").value;
+
+let statusData = {};
+document.querySelectorAll(".status-select").forEach((select, index) => {
+statusData[alatList[index]] = select.value;
+});
+
+let selects = document.querySelectorAll(".status-select");
+let notOkCount = 0;
+let serviceCount = 0;
+
+selects.forEach(function(select){
+if(select.value === "NOT OK") notOkCount++;
+if(select.value === "PERLU SERVICE") serviceCount++;
+});
+
+let alertArea = document.getElementById("alertArea");
+
+if(notOkCount > 0) {
+alertArea.className = "alert alert-danger text-center fw-bold";
+alertArea.innerHTML = "🔴 ALERT! Ada " + notOkCount + " peralatan NOT OK.";
+}
+else if(serviceCount > 0) {
+alertArea.className = "alert alert-warning text-center fw-bold";
+alertArea.innerHTML = "⚠ WARNING! Ada " + serviceCount + " peralatan PERLU SERVICE.";
+}
+else {
+alertArea.className = "alert alert-success text-center fw-bold";
+alertArea.innerHTML = "✅ Semua peralatan NORMAL.";
+}
+
+alertArea.style.display = "block";
+
+/* PROSES FOTO */
+let files = document.getElementById("fotoInput").files;
+let fotoPromises = [];
+
+for (let i = 0; i < files.length; i++) {
+let reader = new FileReader();
+let promise = new Promise((resolve) => {
+reader.onload = function(e) {
+resolve(e.target.result);
+}
+reader.readAsDataURL(files[i]);
+});
+fotoPromises.push(promise);
+}
+
+Promise.all(fotoPromises).then(fotosBase64 => {
+
+fetch(scriptURL, {
+method: "POST",
+body: JSON.stringify({
+tanggal: tanggal,
+kapal: kapal,
+statusAlat: statusData,
+catatan: catatan,
+fotos: fotosBase64
+})
+})
+.then(response => response.text())
+.then(data => {
+alert("Data & Foto berhasil dikirim ke kantor!");
+document.getElementById("monitoringForm").reset();
+document.getElementById("previewContainer").innerHTML = "";
+})
+.catch(error => {
+alert("Gagal kirim data. Periksa koneksi internet.");
+});
+
+});
+
+});
+
+</script>
+
+</body>
+</html>
